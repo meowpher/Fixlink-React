@@ -1,5 +1,5 @@
 {
-  "id": "fcf0a8b4-f1f7-41ff-8624-9f547dce72b8",
+  "id": "c546bbee-81db-434c-b15d-ea3945bd869f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -27,9 +27,10 @@
           "primaryKey": false,
           "notNull": true
         },
-        "category": {
-          "name": "category",
-          "type": "varchar(100)",
+        "type": {
+          "name": "type",
+          "type": "asset_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -175,7 +176,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 1
+          "default": 8
         },
         "created_at": {
           "name": "created_at",
@@ -236,7 +237,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'staff'"
+          "default": "'student'"
         },
         "department": {
           "name": "department",
@@ -325,10 +326,11 @@
         },
         "type": {
           "name": "type",
-          "type": "varchar(100)",
+          "type": "room_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'general'"
+          "default": "'class'"
         },
         "capacity": {
           "name": "capacity",
@@ -664,7 +666,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'submitted'"
+          "default": "'open'"
         },
         "requester_id": {
           "name": "requester_id",
@@ -828,8 +830,8 @@
         "assigned",
         "priority_changed",
         "comment_added",
-        "resolved",
-        "closed"
+        "fixed",
+        "cancelled"
       ]
     },
     "public.asset_status": {
@@ -842,18 +844,44 @@
         "decommissioned"
       ]
     },
+    "public.asset_type": {
+      "name": "asset_type",
+      "schema": "public",
+      "values": [
+        "AC",
+        "Projector",
+        "PC",
+        "Light",
+        "Bench"
+      ]
+    },
+    "public.room_type": {
+      "name": "room_type",
+      "schema": "public",
+      "values": [
+        "class",
+        "lab",
+        "washroom",
+        "faculty",
+        "lift",
+        "kitchen",
+        "canteen",
+        "encave",
+        "conference",
+        "meeting"
+      ]
+    },
     "public.ticket_category": {
       "name": "ticket_category",
       "schema": "public",
       "values": [
-        "plumbing",
         "electrical",
         "hvac",
-        "structural",
-        "carpentry",
-        "pest_control",
+        "it_hardware",
+        "furniture",
+        "plumbing",
+        "civil",
         "cleaning",
-        "safety_hazard",
         "general"
       ]
     },
@@ -872,13 +900,10 @@
       "name": "ticket_status",
       "schema": "public",
       "values": [
-        "submitted",
-        "triaged",
+        "open",
         "assigned",
-        "in_progress",
-        "on_hold",
-        "resolved",
-        "closed",
+        "in-progress",
+        "fixed",
         "cancelled"
       ]
     },
@@ -886,11 +911,11 @@
       "name": "user_role",
       "schema": "public",
       "values": [
+        "student",
+        "faculty",
         "admin",
-        "facility_manager",
-        "technician",
-        "staff",
-        "student"
+        "professional",
+        "super_admin"
       ]
     }
   },

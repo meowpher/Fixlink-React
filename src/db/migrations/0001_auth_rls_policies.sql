@@ -1,5 +1,5 @@
 -- -----------------------------------------------------------------------------
--- FixLink Step 2: Supabase Auth Integration, Triggers & Row-Level Security (RLS)
+-- FixLink: MIT-WPU Vyas Building - Auth, Triggers & Zero-Trust RLS Policies
 -- -----------------------------------------------------------------------------
 
 -- 1. Link profiles.id to Supabase auth.users
@@ -10,7 +10,7 @@ ALTER TABLE "public"."profiles"
   ADD CONSTRAINT "profiles_id_auth_users_fk"
   FOREIGN KEY ("id") REFERENCES auth.users("id") ON DELETE CASCADE;
 
--- 2. Helper functions to get current user role and permissions
+-- 2. Helper Security Functions
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS text
 LANGUAGE sql
@@ -21,7 +21,7 @@ AS $$
   SELECT role::text FROM public.profiles WHERE id = auth.uid() LIMIT 1;
 $$;
 
-CREATE OR REPLACE FUNCTION public.is_admin_or_manager()
+CREATE OR REPLACE FUNCTION public.is_admin_or_super_admin()
 RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -31,7 +31,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles 
     WHERE id = auth.uid() 
-      AND role IN ('admin', 'facility_manager')
+      AND role IN ('admin', 'super_admin')
       AND is_active = true
   );
 $$;
@@ -46,7 +46,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles 
     WHERE id = auth.uid() 
-      AND role IN ('admin', 'facility_manager', 'technician', 'staff')
+      AND role IN ('admin', 'super_admin', 'faculty', 'professional')
       AND is_active = true
   );
 $$;
@@ -64,20 +64,20 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    COALESCE((NEW.raw_user_meta_data->>'role')::public.user_role, 'staff'::public.user_role),
+    COALESCE((NEW.raw_user_meta_data->>'role')::public.user_role, 'student'::public.user_role),
     NEW.raw_user_meta_data->>'avatar_url'
   )
   ON CONFLICT (id) DO UPDATE
   SET 
     email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
+    role = EXCLUDED.role,
     updated_at = now();
 
   RETURN NEW;
 END;
 $$;
 
--- Attach trigger to auth.users
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -157,10 +157,10 @@ CREATE POLICY "Users can update their own profile basic info"
     (role = (SELECT role FROM public.profiles WHERE id = auth.uid()))
   );
 
-CREATE POLICY "Admins can manage all profiles"
+CREATE POLICY "Admins and super admins can manage all profiles"
   ON public.profiles FOR ALL
   TO authenticated
-  USING (public.get_current_user_role() = 'admin');
+  USING (public.is_admin_or_super_admin());
 
 -- --- BUILDINGS ---
 CREATE POLICY "Buildings are viewable by all authenticated users"
@@ -168,10 +168,10 @@ CREATE POLICY "Buildings are viewable by all authenticated users"
   TO authenticated
   USING (true);
 
-CREATE POLICY "Only admins and facility managers can modify buildings"
+CREATE POLICY "Only admins can modify buildings"
   ON public.buildings FOR ALL
   TO authenticated
-  USING (public.is_admin_or_manager());
+  USING (public.is_admin_or_super_admin());
 
 -- --- ROOMS ---
 CREATE POLICY "Rooms are viewable by all authenticated users"
@@ -179,10 +179,10 @@ CREATE POLICY "Rooms are viewable by all authenticated users"
   TO authenticated
   USING (true);
 
-CREATE POLICY "Only admins and facility managers can modify rooms"
+CREATE POLICY "Only admins can modify rooms"
   ON public.rooms FOR ALL
   TO authenticated
-  USING (public.is_admin_or_manager());
+  USING (public.is_admin_or_super_admin());
 
 -- --- ASSETS ---
 CREATE POLICY "Assets are viewable by all authenticated users"
@@ -190,7 +190,7 @@ CREATE POLICY "Assets are viewable by all authenticated users"
   TO authenticated
   USING (true);
 
-CREATE POLICY "Staff, technicians and managers can manage assets"
+CREATE POLICY "Professionals and admins can manage assets"
   ON public.assets FOR ALL
   TO authenticated
   USING (public.is_staff_or_above());
@@ -212,27 +212,27 @@ CREATE POLICY "Any authenticated user can submit a ticket"
     auth.uid() = requester_id
   );
 
-CREATE POLICY "Requesters can cancel or update their ticket if submitted"
+CREATE POLICY "Requesters can cancel or update their ticket if still open"
   ON public.tickets FOR UPDATE
   TO authenticated
   USING (
-    requester_id = auth.uid() AND status = 'submitted'
+    requester_id = auth.uid() AND status = 'open'
   )
   WITH CHECK (
     requester_id = auth.uid()
   );
 
-CREATE POLICY "Technicians and managers can update tickets"
+CREATE POLICY "Assigned professionals and admins can update tickets"
   ON public.tickets FOR UPDATE
   TO authenticated
   USING (
-    assigned_to = auth.uid() OR public.is_admin_or_manager()
+    assigned_to = auth.uid() OR public.is_admin_or_super_admin()
   );
 
 CREATE POLICY "Admins can delete tickets"
   ON public.tickets FOR DELETE
   TO authenticated
-  USING (public.get_current_user_role() = 'admin');
+  USING (public.is_admin_or_super_admin());
 
 -- --- TICKET COMMENTS ---
 CREATE POLICY "Users can read comments on tickets they have access to"

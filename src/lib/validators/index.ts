@@ -1,11 +1,40 @@
 import { z } from "zod";
 
 export const userRoleSchema = z.enum([
-  "admin",
-  "facility_manager",
-  "technician",
-  "staff",
   "student",
+  "faculty",
+  "admin",
+  "professional",
+  "super_admin",
+]);
+
+export const roomTypeSchema = z.enum([
+  "class",
+  "lab",
+  "washroom",
+  "faculty",
+  "lift",
+  "kitchen",
+  "canteen",
+  "encave",
+  "conference",
+  "meeting",
+]);
+
+export const assetTypeSchema = z.enum([
+  "AC",
+  "Projector",
+  "PC",
+  "Light",
+  "Bench",
+]);
+
+export const ticketStatusSchema = z.enum([
+  "open",
+  "assigned",
+  "in-progress",
+  "fixed",
+  "cancelled",
 ]);
 
 export const ticketPrioritySchema = z.enum([
@@ -16,26 +45,14 @@ export const ticketPrioritySchema = z.enum([
   "critical",
 ]);
 
-export const ticketStatusSchema = z.enum([
-  "submitted",
-  "triaged",
-  "assigned",
-  "in_progress",
-  "on_hold",
-  "resolved",
-  "closed",
-  "cancelled",
-]);
-
 export const ticketCategorySchema = z.enum([
-  "plumbing",
   "electrical",
   "hvac",
-  "structural",
-  "carpentry",
-  "pest_control",
+  "it_hardware",
+  "furniture",
+  "plumbing",
+  "civil",
   "cleaning",
-  "safety_hazard",
   "general",
 ]);
 
@@ -68,7 +85,7 @@ export const updateTicketStatusSchema = z.object({
 
 export const assignTicketSchema = z.object({
   ticketId: z.string().uuid(),
-  assignedTo: z.string().uuid("Select a valid technician/manager"),
+  assignedTo: z.string().uuid("Select a valid staff/professional"),
 });
 
 export const createCommentSchema = z.object({
@@ -82,21 +99,21 @@ export const createBuildingSchema = z.object({
   code: z.string().min(2).max(50),
   campusZone: z.string().max(100).optional().nullable(),
   address: z.string().optional().nullable(),
-  totalFloors: z.number().int().min(1).default(1),
+  totalFloors: z.number().int().min(1).default(8),
 });
 
 export const createRoomSchema = z.object({
   buildingId: z.string().uuid(),
   roomNumber: z.string().min(1).max(50),
-  floor: z.number().int(),
-  type: z.string().default("general"),
+  floor: z.number().int().min(0).max(7),
+  type: roomTypeSchema.default("class"),
   capacity: z.number().int().optional().nullable(),
 });
 
 export const createAssetSchema = z.object({
   name: z.string().min(2).max(255),
   assetTag: z.string().min(2).max(100),
-  category: z.string().min(2).max(100),
+  type: assetTypeSchema,
   buildingId: z.string().uuid().optional().nullable(),
   roomId: z.string().uuid().optional().nullable(),
   status: assetStatusSchema.default("operational"),

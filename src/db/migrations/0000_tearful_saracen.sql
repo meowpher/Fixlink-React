@@ -1,14 +1,16 @@
-CREATE TYPE "public"."activity_type" AS ENUM('created', 'status_changed', 'assigned', 'priority_changed', 'comment_added', 'resolved', 'closed');--> statement-breakpoint
+CREATE TYPE "public"."activity_type" AS ENUM('created', 'status_changed', 'assigned', 'priority_changed', 'comment_added', 'fixed', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."asset_status" AS ENUM('operational', 'degraded', 'under_maintenance', 'decommissioned');--> statement-breakpoint
-CREATE TYPE "public"."ticket_category" AS ENUM('plumbing', 'electrical', 'hvac', 'structural', 'carpentry', 'pest_control', 'cleaning', 'safety_hazard', 'general');--> statement-breakpoint
+CREATE TYPE "public"."asset_type" AS ENUM('AC', 'Projector', 'PC', 'Light', 'Bench');--> statement-breakpoint
+CREATE TYPE "public"."room_type" AS ENUM('class', 'lab', 'washroom', 'faculty', 'lift', 'kitchen', 'canteen', 'encave', 'conference', 'meeting');--> statement-breakpoint
+CREATE TYPE "public"."ticket_category" AS ENUM('electrical', 'hvac', 'it_hardware', 'furniture', 'plumbing', 'civil', 'cleaning', 'general');--> statement-breakpoint
 CREATE TYPE "public"."ticket_priority" AS ENUM('low', 'medium', 'high', 'urgent', 'critical');--> statement-breakpoint
-CREATE TYPE "public"."ticket_status" AS ENUM('submitted', 'triaged', 'assigned', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled');--> statement-breakpoint
-CREATE TYPE "public"."user_role" AS ENUM('admin', 'facility_manager', 'technician', 'staff', 'student');--> statement-breakpoint
+CREATE TYPE "public"."ticket_status" AS ENUM('open', 'assigned', 'in-progress', 'fixed', 'cancelled');--> statement-breakpoint
+CREATE TYPE "public"."user_role" AS ENUM('student', 'faculty', 'admin', 'professional', 'super_admin');--> statement-breakpoint
 CREATE TABLE "assets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"asset_tag" varchar(100) NOT NULL,
-	"category" varchar(100) NOT NULL,
+	"type" "asset_type" NOT NULL,
 	"building_id" uuid,
 	"room_id" uuid,
 	"status" "asset_status" DEFAULT 'operational' NOT NULL,
@@ -27,7 +29,7 @@ CREATE TABLE "buildings" (
 	"code" varchar(50) NOT NULL,
 	"campus_zone" varchar(100),
 	"address" text,
-	"total_floors" integer DEFAULT 1 NOT NULL,
+	"total_floors" integer DEFAULT 8 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "buildings_code_unique" UNIQUE("code")
@@ -37,7 +39,7 @@ CREATE TABLE "profiles" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"email" varchar(255) NOT NULL,
 	"full_name" varchar(255) NOT NULL,
-	"role" "user_role" DEFAULT 'staff' NOT NULL,
+	"role" "user_role" DEFAULT 'student' NOT NULL,
 	"department" varchar(150),
 	"phone" varchar(50),
 	"avatar_url" text,
@@ -52,7 +54,7 @@ CREATE TABLE "rooms" (
 	"building_id" uuid NOT NULL,
 	"room_number" varchar(50) NOT NULL,
 	"floor" integer NOT NULL,
-	"type" varchar(100) DEFAULT 'general' NOT NULL,
+	"type" "room_type" DEFAULT 'class' NOT NULL,
 	"capacity" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -93,7 +95,7 @@ CREATE TABLE "tickets" (
 	"description" text NOT NULL,
 	"category" "ticket_category" NOT NULL,
 	"priority" "ticket_priority" DEFAULT 'medium' NOT NULL,
-	"status" "ticket_status" DEFAULT 'submitted' NOT NULL,
+	"status" "ticket_status" DEFAULT 'open' NOT NULL,
 	"requester_id" uuid NOT NULL,
 	"assigned_to" uuid,
 	"building_id" uuid NOT NULL,

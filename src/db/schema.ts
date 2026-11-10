@@ -13,14 +13,44 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// ENUMS
+// ENUMS (MIT-WPU FixLink Digital Twin Architecture)
 // ---------------------------------------------------------------------------
+
 export const userRoleEnum = pgEnum("user_role", [
-  "admin",
-  "facility_manager",
-  "technician",
-  "staff",
   "student",
+  "faculty",
+  "admin",
+  "professional",
+  "super_admin",
+]);
+
+export const roomTypeEnum = pgEnum("room_type", [
+  "class",
+  "lab",
+  "washroom",
+  "faculty",
+  "lift",
+  "kitchen",
+  "canteen",
+  "encave",
+  "conference",
+  "meeting",
+]);
+
+export const assetTypeEnum = pgEnum("asset_type", [
+  "AC",
+  "Projector",
+  "PC",
+  "Light",
+  "Bench",
+]);
+
+export const ticketStatusEnum = pgEnum("ticket_status", [
+  "open",
+  "assigned",
+  "in-progress",
+  "fixed",
+  "cancelled",
 ]);
 
 export const ticketPriorityEnum = pgEnum("ticket_priority", [
@@ -31,26 +61,14 @@ export const ticketPriorityEnum = pgEnum("ticket_priority", [
   "critical",
 ]);
 
-export const ticketStatusEnum = pgEnum("ticket_status", [
-  "submitted",
-  "triaged",
-  "assigned",
-  "in_progress",
-  "on_hold",
-  "resolved",
-  "closed",
-  "cancelled",
-]);
-
 export const ticketCategoryEnum = pgEnum("ticket_category", [
-  "plumbing",
   "electrical",
   "hvac",
-  "structural",
-  "carpentry",
-  "pest_control",
+  "it_hardware",
+  "furniture",
+  "plumbing",
+  "civil",
   "cleaning",
-  "safety_hazard",
   "general",
 ]);
 
@@ -67,8 +85,8 @@ export const activityTypeEnum = pgEnum("activity_type", [
   "assigned",
   "priority_changed",
   "comment_added",
-  "resolved",
-  "closed",
+  "fixed",
+  "cancelled",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -82,7 +100,7 @@ export const profiles = pgTable("profiles", {
   id: uuid("id").primaryKey(), // maps to auth.users.id
   email: varchar("email", { length: 255 }).notNull().unique(),
   fullName: varchar("full_name", { length: 255 }).notNull(),
-  role: userRoleEnum("role").default("staff").notNull(),
+  role: userRoleEnum("role").default("student").notNull(),
   department: varchar("department", { length: 150 }),
   phone: varchar("phone", { length: 50 }),
   avatarUrl: text("avatar_url"),
@@ -92,42 +110,42 @@ export const profiles = pgTable("profiles", {
 });
 
 /**
- * Campus Buildings
+ * Campus Buildings (Vyas Building at MIT-WPU)
  */
 export const buildings = pgTable("buildings", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  code: varchar("code", { length: 50 }).notNull().unique(), // e.g. "ENG-A", "SCI-1"
-  campusZone: varchar("campus_zone", { length: 100 }), // e.g. "North Campus"
+  code: varchar("code", { length: 50 }).notNull().unique(), // e.g. "VYAS"
+  campusZone: varchar("campus_zone", { length: 100 }), // e.g. "MIT-WPU Kothrud"
   address: text("address"),
-  totalFloors: integer("total_floors").default(1).notNull(),
+  totalFloors: integer("total_floors").default(8).notNull(), // Level 0 through Level 7
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
- * Specific Rooms / Spaces inside Buildings
+ * Specific Rooms / Spaces inside Vyas Building
  */
 export const rooms = pgTable("rooms", {
   id: uuid("id").defaultRandom().primaryKey(),
   buildingId: uuid("building_id")
     .references(() => buildings.id, { onDelete: "cascade" })
     .notNull(),
-  roomNumber: varchar("room_number", { length: 50 }).notNull(),
-  floor: integer("floor").notNull(),
-  type: varchar("type", { length: 100 }).default("general").notNull(), // classroom, lab, office, restroom, mechanical
+  roomNumber: varchar("room_number", { length: 50 }).notNull(), // e.g. "VY001", "VY401", "MR4"
+  floor: integer("floor").notNull(), // 0 to 7
+  type: roomTypeEnum("type").default("class").notNull(),
   capacity: integer("capacity"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
- * Campus Assets & Equipment (HVAC units, generators, elevators, etc.)
+ * Equipment & Digital Twin Assets inside Rooms
  */
 export const assets = pgTable("assets", {
   id: uuid("id").defaultRandom().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(), // e.g. "PRJ-01", "AC-NORTH"
   assetTag: varchar("asset_tag", { length: 100 }).notNull().unique(),
-  category: varchar("category", { length: 100 }).notNull(),
+  type: assetTypeEnum("type").notNull(), // 'AC' | 'Projector' | 'PC' | 'Light' | 'Bench'
   buildingId: uuid("building_id").references(() => buildings.id, {
     onDelete: "set null",
   }),
@@ -144,7 +162,7 @@ export const assets = pgTable("assets", {
 });
 
 /**
- * Maintenance Tickets / Work Orders
+ * Maintenance Tickets / Issues reported in Vyas Building
  */
 export const tickets = pgTable("tickets", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -153,7 +171,7 @@ export const tickets = pgTable("tickets", {
   description: text("description").notNull(),
   category: ticketCategoryEnum("category").notNull(),
   priority: ticketPriorityEnum("priority").default("medium").notNull(),
-  status: ticketStatusEnum("status").default("submitted").notNull(),
+  status: ticketStatusEnum("status").default("open").notNull(), // 'open' | 'assigned' | 'in-progress' | 'fixed' | 'cancelled'
 
   requesterId: uuid("requester_id")
     .references(() => profiles.id, { onDelete: "restrict" })
@@ -181,7 +199,7 @@ export const tickets = pgTable("tickets", {
 });
 
 /**
- * Ticket Comments (Public communication or Internal technician notes)
+ * Ticket Comments
  */
 export const ticketComments = pgTable("ticket_comments", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -197,7 +215,7 @@ export const ticketComments = pgTable("ticket_comments", {
 });
 
 /**
- * Attachments / Images for Tickets
+ * Attachments for Tickets
  */
 export const ticketAttachments = pgTable("ticket_attachments", {
   id: uuid("id").defaultRandom().primaryKey(),
