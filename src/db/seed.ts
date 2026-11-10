@@ -3,7 +3,7 @@ dotenv.config({ path: ".env.local" });
 
 import { eq } from "drizzle-orm";
 import { db } from "./index";
-import { buildings, rooms, assets, profiles } from "./schema";
+import { buildings, rooms, assets } from "./schema";
 import postgres from "postgres";
 import crypto from "crypto";
 

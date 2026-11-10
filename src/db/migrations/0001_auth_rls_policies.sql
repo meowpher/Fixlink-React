@@ -313,3 +313,4 @@ CREATE POLICY "Activity logs can be inserted by system or staff"
   ON public.ticket_activity_logs FOR INSERT
   TO authenticated
   WITH CHECK (true);
+
