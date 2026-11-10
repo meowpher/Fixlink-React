@@ -1,1 +1,337 @@
-// Schema definitions for FixLink will be placed here in Step 2.
+import { relations } from "drizzle-orm";
+import {
+  boolean,
+  decimal,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+export const userRoleEnum = pgEnum("user_role", [
+  "admin",
+  "facility_manager",
+  "technician",
+  "staff",
+  "student",
+]);
+
+export const ticketPriorityEnum = pgEnum("ticket_priority", [
+  "low",
+  "medium",
+  "high",
+  "urgent",
+  "critical",
+]);
+
+export const ticketStatusEnum = pgEnum("ticket_status", [
+  "submitted",
+  "triaged",
+  "assigned",
+  "in_progress",
+  "on_hold",
+  "resolved",
+  "closed",
+  "cancelled",
+]);
+
+export const ticketCategoryEnum = pgEnum("ticket_category", [
+  "plumbing",
+  "electrical",
+  "hvac",
+  "structural",
+  "carpentry",
+  "pest_control",
+  "cleaning",
+  "safety_hazard",
+  "general",
+]);
+
+export const assetStatusEnum = pgEnum("asset_status", [
+  "operational",
+  "degraded",
+  "under_maintenance",
+  "decommissioned",
+]);
+
+export const activityTypeEnum = pgEnum("activity_type", [
+  "created",
+  "status_changed",
+  "assigned",
+  "priority_changed",
+  "comment_added",
+  "resolved",
+  "closed",
+]);
+
+// ---------------------------------------------------------------------------
+// TABLES
+// ---------------------------------------------------------------------------
+
+/**
+ * Profiles table linked 1:1 with Supabase auth.users
+ */
+export const profiles = pgTable("profiles", {
+  id: uuid("id").primaryKey(), // maps to auth.users.id
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  fullName: varchar("full_name", { length: 255 }).notNull(),
+  role: userRoleEnum("role").default("staff").notNull(),
+  department: varchar("department", { length: 150 }),
+  phone: varchar("phone", { length: 50 }),
+  avatarUrl: text("avatar_url"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Campus Buildings
+ */
+export const buildings = pgTable("buildings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 50 }).notNull().unique(), // e.g. "ENG-A", "SCI-1"
+  campusZone: varchar("campus_zone", { length: 100 }), // e.g. "North Campus"
+  address: text("address"),
+  totalFloors: integer("total_floors").default(1).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Specific Rooms / Spaces inside Buildings
+ */
+export const rooms = pgTable("rooms", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  buildingId: uuid("building_id")
+    .references(() => buildings.id, { onDelete: "cascade" })
+    .notNull(),
+  roomNumber: varchar("room_number", { length: 50 }).notNull(),
+  floor: integer("floor").notNull(),
+  type: varchar("type", { length: 100 }).default("general").notNull(), // classroom, lab, office, restroom, mechanical
+  capacity: integer("capacity"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Campus Assets & Equipment (HVAC units, generators, elevators, etc.)
+ */
+export const assets = pgTable("assets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  assetTag: varchar("asset_tag", { length: 100 }).notNull().unique(),
+  category: varchar("category", { length: 100 }).notNull(),
+  buildingId: uuid("building_id").references(() => buildings.id, {
+    onDelete: "set null",
+  }),
+  roomId: uuid("room_id").references(() => rooms.id, {
+    onDelete: "set null",
+  }),
+  status: assetStatusEnum("status").default("operational").notNull(),
+  modelNumber: varchar("model_number", { length: 150 }),
+  serialNumber: varchar("serial_number", { length: 150 }),
+  installedAt: timestamp("installed_at", { withTimezone: true }),
+  lastInspectedAt: timestamp("last_inspected_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Maintenance Tickets / Work Orders
+ */
+export const tickets = pgTable("tickets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ticketNumber: varchar("ticket_number", { length: 30 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  category: ticketCategoryEnum("category").notNull(),
+  priority: ticketPriorityEnum("priority").default("medium").notNull(),
+  status: ticketStatusEnum("status").default("submitted").notNull(),
+
+  requesterId: uuid("requester_id")
+    .references(() => profiles.id, { onDelete: "restrict" })
+    .notNull(),
+  assignedTo: uuid("assigned_to").references(() => profiles.id, {
+    onDelete: "set null",
+  }),
+
+  buildingId: uuid("building_id")
+    .references(() => buildings.id, { onDelete: "restrict" })
+    .notNull(),
+  roomId: uuid("room_id").references(() => rooms.id, {
+    onDelete: "set null",
+  }),
+  assetId: uuid("asset_id").references(() => assets.id, {
+    onDelete: "set null",
+  }),
+
+  estimatedCost: decimal("estimated_cost", { precision: 10, scale: 2 }),
+  actualCost: decimal("actual_cost", { precision: 10, scale: 2 }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Ticket Comments (Public communication or Internal technician notes)
+ */
+export const ticketComments = pgTable("ticket_comments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ticketId: uuid("ticket_id")
+    .references(() => tickets.id, { onDelete: "cascade" })
+    .notNull(),
+  authorId: uuid("author_id")
+    .references(() => profiles.id, { onDelete: "cascade" })
+    .notNull(),
+  comment: text("comment").notNull(),
+  isInternal: boolean("is_internal").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Attachments / Images for Tickets
+ */
+export const ticketAttachments = pgTable("ticket_attachments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ticketId: uuid("ticket_id")
+    .references(() => tickets.id, { onDelete: "cascade" })
+    .notNull(),
+  uploadedBy: uuid("uploaded_by")
+    .references(() => profiles.id, { onDelete: "cascade" })
+    .notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  fileSize: integer("file_size"),
+  mimeType: varchar("mime_type", { length: 100 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Audit / Activity Log for Tickets
+ */
+export const ticketActivityLogs = pgTable("ticket_activity_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ticketId: uuid("ticket_id")
+    .references(() => tickets.id, { onDelete: "cascade" })
+    .notNull(),
+  actorId: uuid("actor_id").references(() => profiles.id, {
+    onDelete: "set null",
+  }),
+  activityType: activityTypeEnum("activity_type").notNull(),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// RELATIONS
+// ---------------------------------------------------------------------------
+
+export const profilesRelations = relations(profiles, ({ many }) => ({
+  ticketsRequested: many(tickets, { relationName: "requesterTickets" }),
+  ticketsAssigned: many(tickets, { relationName: "assignedTickets" }),
+  comments: many(ticketComments),
+  attachments: many(ticketAttachments),
+  activities: many(ticketActivityLogs),
+}));
+
+export const buildingsRelations = relations(buildings, ({ many }) => ({
+  rooms: many(rooms),
+  assets: many(assets),
+  tickets: many(tickets),
+}));
+
+export const roomsRelations = relations(rooms, ({ one, many }) => ({
+  building: one(buildings, {
+    fields: [rooms.buildingId],
+    references: [buildings.id],
+  }),
+  assets: many(assets),
+  tickets: many(tickets),
+}));
+
+export const assetsRelations = relations(assets, ({ one, many }) => ({
+  building: one(buildings, {
+    fields: [assets.buildingId],
+    references: [buildings.id],
+  }),
+  room: one(rooms, {
+    fields: [assets.roomId],
+    references: [rooms.id],
+  }),
+  tickets: many(tickets),
+}));
+
+export const ticketsRelations = relations(tickets, ({ one, many }) => ({
+  requester: one(profiles, {
+    fields: [tickets.requesterId],
+    references: [profiles.id],
+    relationName: "requesterTickets",
+  }),
+  assignee: one(profiles, {
+    fields: [tickets.assignedTo],
+    references: [profiles.id],
+    relationName: "assignedTickets",
+  }),
+  building: one(buildings, {
+    fields: [tickets.buildingId],
+    references: [buildings.id],
+  }),
+  room: one(rooms, {
+    fields: [tickets.roomId],
+    references: [rooms.id],
+  }),
+  asset: one(assets, {
+    fields: [tickets.assetId],
+    references: [assets.id],
+  }),
+  comments: many(ticketComments),
+  attachments: many(ticketAttachments),
+  activityLogs: many(ticketActivityLogs),
+}));
+
+export const ticketCommentsRelations = relations(ticketComments, ({ one }) => ({
+  ticket: one(tickets, {
+    fields: [ticketComments.ticketId],
+    references: [tickets.id],
+  }),
+  author: one(profiles, {
+    fields: [ticketComments.authorId],
+    references: [profiles.id],
+  }),
+}));
+
+export const ticketAttachmentsRelations = relations(
+  ticketAttachments,
+  ({ one }) => ({
+    ticket: one(tickets, {
+      fields: [ticketAttachments.ticketId],
+      references: [tickets.id],
+    }),
+    uploader: one(profiles, {
+      fields: [ticketAttachments.uploadedBy],
+      references: [profiles.id],
+    }),
+  })
+);
+
+export const ticketActivityLogsRelations = relations(
+  ticketActivityLogs,
+  ({ one }) => ({
+    ticket: one(tickets, {
+      fields: [ticketActivityLogs.ticketId],
+      references: [tickets.id],
+    }),
+    actor: one(profiles, {
+      fields: [ticketActivityLogs.actorId],
+      references: [profiles.id],
+    }),
+  })
+);
